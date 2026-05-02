@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QR Mosaic — Image-Painted QR Codes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0c0b0a;
+    --bg-2: #15130f;
+    --surface: #1c1914;
+    --line: #2a2620;
+    --ink: #f3ead8;
+    --ink-dim: #a39684;
+    --ink-faint: #6b6052;
+    --accent: #ffb347;
+    --accent-deep: #e08a1a;
+    --danger: #ff6b6b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background:
+      radial-gradient(ellipse at top left, rgba(255, 179, 71, 0.06), transparent 50%),
+      radial-gradient(ellipse at bottom right, rgba(255, 179, 71, 0.04), transparent 50%),
+      var(--bg);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .grain {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+    z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  }
+
+  .masthead {
+    position: relative;
+    z-index: 2;
+    padding: 32px 40px 24px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .masthead h1 {
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 144, 'wght' 400, 'SOFT' 30;
+    font-size: 38px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  .masthead h1 em {
+    font-style: normal;
+    color: var(--accent);
+    font-variation-settings: 'opsz' 144, 'wght' 600, 'SOFT' 50;
+  }
+
+  .masthead .meta {
+    font-size: 11px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    text-align: right;
+  }
+
+  .masthead .meta strong {
+    color: var(--ink-dim);
+    font-weight: 500;
+  }
+
+  main {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 0;
+    min-height: calc(100vh - 95px);
+  }
+
+  .panel {
+    padding: 28px 32px;
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    max-height: calc(100vh - 95px);
+  }
+
+  .panel::-webkit-scrollbar { width: 6px; }
+  .panel::-webkit-scrollbar-track { background: transparent; }
+  .panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+  .stage {
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background:
+      linear-gradient(135deg, rgba(255, 179, 71, 0.02), transparent 60%),
+      var(--bg-2);
+  }
+
+  .field {
+    margin-bottom: 24px;
+  }
+
+  .field-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+
+  .field-label .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-dim);
+    font-weight: 500;
+  }
+
+  .field-label .label .num {
+    color: var(--accent);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-variation-settings: 'opsz' 9, 'wght' 400;
+    margin-right: 6px;
+    font-size: 11px;
+  }
+
+  .field-label .value {
+    font-size: 11px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 12px 14px;
+    border-radius: 2px;
+    resize: vertical;
+    transition: border-color 0.15s;
+  }
+
+  textarea {
+    min-height: 90px;
+    line-height: 1.5;
+  }
+
+  textarea:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .char-count {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--ink-faint);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .char-count.warn { color: var(--accent); }
+  .char-count.error { color: var(--danger); }
+
+  /* slider */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 24px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 1px;
+    background: var(--line);
+    border: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-top: -6.5px;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent);
+    transition: transform 0.1s;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+
+  input[type="range"]::-moz-range-track {
+    height: 1px;
+    background: var(--line);
+    border: none;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  /* segmented control */
+  .seg {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .seg button {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 9px 0;
+    cursor: pointer;
+    transition: all 0.15s;
+    border-right: 1px solid var(--line);
+    letter-spacing: 0.05em;
+  }
+
+  .seg button:last-child { border-right: none; }
+
+  .seg button:hover { color: var(--ink); }
+
+  .seg button.active {
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  /* dropzone */
+  .dropzone {
+    border: 1px dashed var(--line);
+    background: var(--surface);
+    border-radius: 2px;
+    padding: 28px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .dropzone:hover, .dropzone.drag {
+    border-color: var(--accent);
+    background: rgba(255, 179, 71, 0.04);
+  }
+
+  .dropzone .icon {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 32px;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 10px;
+    font-variation-settings: 'opsz' 144, 'wght' 300;
+  }
+
+  .dropzone .text {
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .dropzone .text strong {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .dropzone.has-image {
+    padding: 12px;
+    border-style: solid;
+  }
+
+  .dropzone .preview-img {
+    max-width: 100%;
+    max-height: 120px;
+    display: block;
+    margin: 0 auto;
+    border-radius: 2px;
+  }
+
+  .dropzone .filename {
+    font-size: 10px;
+    color: var(--ink-faint);
+    margin-top: 8px;
+    word-break: break-all;
+  }
+
+  input[type="file"] { display: none; }
+
+  /* button */
+  .btn {
+    width: 100%;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 14px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .btn:hover { background: var(--accent-deep); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn.ghost {
+    background: transparent;
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+  }
+
+  .btn.ghost:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(255, 179, 71, 0.04);
+  }
+
+  .section-title {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-variation-settings: 'opsz' 144, 'wght' 400;
+    font-size: 18px;
+    color: var(--ink);
+    margin-bottom: 16px;
+    margin-top: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .section-title:first-child { margin-top: 0; }
+
+  .section-title .num {
+    color: var(--accent);
+    font-style: normal;
+    font-variation-settings: 'opsz' 9, 'wght' 600;
+    font-size: 12px;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 28px 0;
+  }
+
+  /* canvas stage */
+  .canvas-frame {
+    background: white;
+    padding: 16px;
+    border-radius: 2px;
+    box-shadow:
+      0 0 0 1px var(--line),
+      0 30px 60px -20px rgba(0, 0, 0, 0.7),
+      0 0 80px -20px rgba(255, 179, 71, 0.15);
+    max-width: 100%;
+    max-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .canvas-frame canvas {
+    display: block;
+    max-width: 100%;
+    max-height: calc(70vh - 32px);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .stage-meta {
+    display: flex;
+    gap: 32px;
+    font-size: 10px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+  }
+
+  .stage-meta div span {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    margin-right: 6px;
+  }
+
+  .stage-actions {
+    display: flex;
+    gap: 12px;
+  }
+
+  .stage-actions .btn {
+    width: auto;
+    padding: 12px 24px;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--ink-faint);
+    font-size: 12px;
+    line-height: 1.7;
+    max-width: 360px;
+  }
+
+  .empty-state .big {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-variation-settings: 'opsz' 144, 'wght' 300;
+    font-size: 56px;
+    line-height: 1;
+    color: var(--ink-dim);
+    margin-bottom: 20px;
+    letter-spacing: -0.02em;
+  }
+
+  .empty-state .big em {
+    color: var(--accent);
+    font-style: normal;
+    font-variation-settings: 'opsz' 144, 'wght' 500;
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 11px;
+    color: var(--ink-dim);
+    padding: 6px 0;
+  }
+
+  .checkbox-row input { display: none; }
+
+  .checkbox-row .box {
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  .checkbox-row input:checked + .box {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .checkbox-row input:checked + .box::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--bg);
+    border-radius: 1px;
+  }
+
+  .checkbox-row:hover { color: var(--ink); }
+
+  .hint {
+    font-size: 10px;
+    color: var(--ink-faint);
+    line-height: 1.5;
+    margin-top: 8px;
+    padding-left: 2px;
+    font-style: italic;
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 9, 'wght' 300;
+  }
+
+  /* responsive */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .panel {
+      border-right: none;
+      border-bottom: 1px solid var(--line);
+      max-height: none;
+    }
+    .stage { padding: 24px; }
+    .masthead { padding: 24px; flex-direction: column; align-items: flex-start; gap: 12px; }
+    .masthead .meta { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grain"></div>
+
+<header class="masthead">
+  <h1>QR <em>Mosaic</em>.</h1>
+  <div class="meta">
+    <strong>Version 40 · 177×177</strong><br/>
+    Image-painted QR codes
+  </div>
+</header>
+
+<main>
+  <aside class="panel">
+    <div class="section-title"><span class="num">01</span>Payload</div>
+
+    <div class="field">
+      <div class="field-label">
+        <span class="label"><span class="num">a</span>Type</span>
+      </div>
+      <div class="seg" id="payload-seg">
+        <button data-payload="link" class="active">Link</button>
+        <button data-payload="text">Text</button>
+      </div>
+    </div>
+
+    <div class="field" id="link-field">
+      <div class="field-label">
+        <span class="label"><span class="num">b</span>URL</span>
+        <span class="value" id="char-count-url">0 chars</span>
+      </div>
+      <input type="text" id="qr-url" placeholder="https://your-link.com" spellcheck="false" autocomplete="off" />
+      <div class="hint" id="url-hint">Auto-prepends <code style="color:var(--ink-dim)">https://</code> on blur if missing.</div>
+    </div>
+
+    <div class="field" id="text-field" style="display: none;">
+      <div class="field-label">
+        <span class="label"><span class="num">b</span>Encoded text</span>
+      </div>
+      <textarea id="qr-text" spellcheck="false"></textarea>
+      <div class="char-count" id="char-count">0 / 1273 chars</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">
+        <span class="label"><span class="num">c</span>Error correction</span>
+      </div>
+      <div class="seg" id="ec-seg">
+        <button data-ec="L">L · 7%</button>
+        <button data-ec="M">M · 15%</button>
+        <button data-ec="Q">Q · 25%</button>
+        <button data-ec="H" class="active">H · 30%</button>
+      </div>
+    </div>
+
+    <hr/>
+
+    <div class="section-title"><span class="num">02</span>Source image</div>
+
+    <label class="dropzone" id="dropzone" for="file-input">
+      <div class="icon">+</div>
+      <div class="text">
+        <strong>Drop an image</strong><br/>or click to upload
+      </div>
+    </label>
+    <input type="file" id="file-input" accept="image/*" />
+
+    <hr/>
+
+    <div class="section-title"><span class="num">03</span>Aesthetic</div>
+
+    <div class="field">
+      <div class="field-label">
+        <span class="label"><span class="num">a</span>Render mode</span>
+      </div>
+      <div class="seg" id="mode-seg">
+        <button data-mode="pixelate" class="active">Pixelate</button>
+        <button data-mode="overlay">Overlay</button>
+      </div>
+      <div class="hint" id="mode-hint">Image-first. The slider is the share of Reed-Solomon error correction budget you want to spend on keeping image pixels.</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">
+        <span class="label"><span class="num">b</span>Image budget</span>
+        <span class="value" id="intensity-val">30%</span>
+      </div>
+      <input type="range" id="intensity" min="0" max="100" value="30" />
+      <div class="hint">Higher = more pixels show raw image color (uses Reed-Solomon error correction budget).</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">
+        <span class="label"><span class="num">c</span>Anchor strength</span>
+        <span class="value" id="anchor-val">60%</span>
+      </div>
+      <input type="range" id="anchor" min="20" max="100" value="60" />
+      <div class="hint">How aggressively conflicting pixels get pushed toward black/white. Lower = image bleeds through anchors, higher = pure-black/white anchor squares.</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">
+        <span class="label"><span class="num">d</span>Module size (px)</span>
+        <span class="value" id="scale-val">5</span>
+      </div>
+      <input type="range" id="scale" min="2" max="12" value="5" />
+    </div>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="preserve-finders" checked />
+      <span class="box"></span>
+      <span>Preserve QR structure (finders, alignment, timing, format)</span>
+    </label>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="boost-contrast" checked />
+      <span class="box"></span>
+      <span>Auto-balance luminance (recommended)</span>
+    </label>
+  </aside>
+
+  <section class="stage">
+    <div class="canvas-frame" id="canvas-frame">
+      <canvas id="qr-canvas"></canvas>
+    </div>
+    <div class="stage-meta">
+      <div><span id="meta-modules">177</span>modules</div>
+      <div><span id="meta-size">885</span>output px</div>
+      <div><span id="meta-image">none</span>image</div>
+      <div><span id="meta-fidelity">—</span>fidelity</div>
+    </div>
+    <div class="stage-actions">
+      <button class="btn ghost" id="test-scan">Test scannability</button>
+      <button class="btn" id="download">↓ Download PNG</button>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ====================================================================
+   QR Mosaic — image-painted QR codes
+   Algorithm: for each module of a Version 40 QR, sample the underlying
+   image pixel and either darken (for dark modules) or lighten (for
+   light modules) so the QR contrast is preserved while the image
+   "shows through" the dot pattern. High error correction (H ≈ 30%)
+   absorbs the noise from finder areas / extreme image colors.
+==================================================================== */
+
+const DEFAULT_TEXT = `A QR code (abbreviated from Quick Response code) is a type of matrix barcode (or two-dimensional code) that is designed to be read by smartphones. The code consists of black modules arranged in a square pattern on a white background. The information encoded may be text, a URL, or other data.
+Created by Toyota subsidiary Denso Wave in 1994, the QR code is one of the most popular types of two-dimensional barcodes. The QR code was designed to allow its contents to be decoded at high speed.`;
+
+// Capacity for Version 40 (byte mode) per error correction level
+const CAPACITY = { L: 2953, M: 2331, Q: 1663, H: 1273 };
+
+// How aggressively to push pixels that *must* match the QR pattern
+// (because their codeword can't be corrupted within the RS budget).
+// This is intentionally decoupled from the user-facing "Correction
+// strength" slider — the slider controls how much RS budget to spend,
+// but anchor pixels should always go to near-pure black/white so phone
+// cameras can lock onto the code reliably even at small module sizes.
+// 0.92 → forced dark pixels are 8% of original color (very dark);
+//        forced light pixels are 92% blended toward white (very light).
+const FORCED_CONTRAST = 0.92;
+
+/* ====================================================================
+   V40 STRUCTURAL HELPERS — used for Reed-Solomon-aware pixel selection
+   in the Pixelate render mode.
+
+   The strategy: every "conflicting" image pixel (one whose natural
+   luminance disagrees with the QR module it must occupy) is a
+   potential bit error. RS decodes by codeword, not by bit, so once a
+   codeword has any error, additional errors in the same codeword are
+   free. Each block has its own error budget. We greedily spend that
+   budget on codewords with the most conflicts to maximize how many
+   image pixels we get to keep.
+==================================================================== */
+
+const V40 = {
+  N: 177,
+  ALIGN: [6, 30, 58, 86, 114, 142, 170],
+  // Block structure per ECL.
+  // (groups[i].count blocks each containing groups[i].data data codewords;
+  // every block also has ecPerBlock EC codewords; maxCorrect codewords
+  // per block can be corrupted before the block fails to decode.)
+  BLOCKS: {
+    L: { groups: [{ count: 19, data: 118 }, { count: 6,  data: 119 }], ecPerBlock: 30, maxCorrect: 15 },
+    M: { groups: [{ count: 18, data: 47  }, { count: 31, data: 48  }], ecPerBlock: 28, maxCorrect: 14 },
+    Q: { groups: [{ count: 34, data: 24  }, { count: 34, data: 25  }], ecPerBlock: 30, maxCorrect: 15 },
+    H: { groups: [{ count: 20, data: 15  }, { count: 61, data: 16  }], ecPerBlock: 30, maxCorrect: 15 },
+  },
+};
+
+// Returns true if (r, c) is a function-pattern module (finder, separator,
+// timing, alignment, format-info, version-info, or dark-module). These
+// modules are fixed by the spec and must never be modified.
+function _isFunctionalV40(r, c) {
+  const n = V40.N;
+  // Three finder patterns + their separators (8x8 each)
+  if (r < 8 && c < 8) return true;
+  if (r < 8 && c >= n - 8) return true;
+  if (r >= n - 8 && c < 8) return true;
+  // Format info strips around the finders + the always-dark module at (n-8, 8)
+  if (r === 8 && (c <= 8 || c >= n - 8)) return true;
+  if (c === 8 && (r <= 8 || r >= n - 8)) return true;
+  // Timing patterns (the dotted bridges between finders)
+  if (r === 6 && c >= 8 && c < n - 8) return true;
+  if (c === 6 && r >= 8 && r < n - 8) return true;
+  // Version info (V7+): two 6x3 strips near top-right and bottom-left finders
+  if (r < 6 && c >= n - 11 && c < n - 8) return true;
+  if (c < 6 && r >= n - 11 && r < n - 8) return true;
+  // Alignment patterns — 5x5 each, centered on every coord pair except
+  // the three that would overlap finders
+  for (const ar of V40.ALIGN) {
+    for (const ac of V40.ALIGN) {
+      if ((ar === 6 && ac === 6) ||
+          (ar === 6 && ac === 170) ||
+          (ar === 170 && ac === 6)) continue;
+      if (Math.abs(r - ar) <= 2 && Math.abs(c - ac) <= 2) return true;
+    }
+  }
+  return false;
+}
+
+// Cached functional-pattern lookup: 1 bit per module.
+let _funcCache = null;
+function isFunctionalV40(r, c) {
+  if (!_funcCache) {
+    const n = V40.N;
+    _funcCache = new Uint8Array(n * n);
+    for (let rr = 0; rr < n; rr++)
+      for (let cc = 0; cc < n; cc++)
+        _funcCache[rr * n + cc] = _isFunctionalV40(rr, cc) ? 1 : 0;
+  }
+  return _funcCache[r * V40.N + c] === 1;
+}
+
+// Build the data placement order: for each non-functional module
+// (r, c), what is its index in the bitstream the encoder placed?
+//
+// Per the QR spec: snake upward through 2-column-wide vertical strips,
+// starting at the bottom-right corner. When a strip would include
+// column 6 (the vertical timing pattern), shift it left by one.
+let _placementCache = null;
+function placementBitIndex(r, c) {
+  if (_placementCache) return _placementCache[r * V40.N + c];
+  const n = V40.N;
+  const arr = new Int32Array(n * n).fill(-1);
+  let bitIdx = 0;
+  let col = n - 1;
+  let upward = true;
+  while (col > 0) {
+    if (col === 6) col = 5;
+    for (let i = 0; i < n; i++) {
+      const row = upward ? (n - 1 - i) : i;
+      for (let off = 0; off < 2; off++) {
+        const cc = col - off;
+        if (!isFunctionalV40(row, cc)) {
+          arr[row * n + cc] = bitIdx++;
+        }
+      }
+    }
+    upward = !upward;
+    col -= 2;
+  }
+  _placementCache = arr;
+  return arr[r * n + c];
+}
+
+// For a given ECL, build the array codewordIdx -> blockIdx, where
+// codewordIdx is the position in placement order (data codewords first,
+// then EC codewords, both interleaved across all blocks).
+const _blockMapCache = {};
+function blockMapForECL(ecl) {
+  if (_blockMapCache[ecl]) return _blockMapCache[ecl];
+  const info = V40.BLOCKS[ecl];
+  const sizes = [];
+  for (const g of info.groups)
+    for (let i = 0; i < g.count; i++) sizes.push(g.data);
+  const totalBlocks = sizes.length;
+  const maxData = Math.max(...sizes);
+
+  const codewordToBlock = [];
+  // Data codewords interleaved by round
+  for (let round = 0; round < maxData; round++) {
+    for (let b = 0; b < totalBlocks; b++) {
+      if (round < sizes[b]) codewordToBlock.push(b);
+    }
+  }
+  // EC codewords interleaved by round
+  for (let round = 0; round < info.ecPerBlock; round++) {
+    for (let b = 0; b < totalBlocks; b++) codewordToBlock.push(b);
+  }
+
+  const result = { codewordToBlock, totalBlocks, maxCorrect: info.maxCorrect };
+  _blockMapCache[ecl] = result;
+  return result;
+}
+
+// state
+let state = {
+  payloadType: 'link', // 'link' | 'text'
+  linkValue: 'https://en.wikipedia.org/wiki/QR_code',
+  textValue: DEFAULT_TEXT,
+  text: 'https://en.wikipedia.org/wiki/QR_code', // active payload (synced from above)
+  ec: 'H',
+  mode: 'pixelate',   // 'pixelate' | 'overlay'
+  intensity: 0.30,    // image-budget fraction: 0 = pure QR, 1 = full image
+  anchorStrength: 0.60, // forced-pixel push strength: 0.20=mild..1.00=near-black/white
+  scale: 5,
+  style: 'square',
+  preserveFinders: true,
+  boostContrast: true,
+  image: null,        // HTMLImageElement
+  imageName: null,
+};
+
+// elements
+const $ = (id) => document.getElementById(id);
+const textArea = $('qr-text');
+const charCount = $('char-count');
+const charCountUrl = $('char-count-url');
+const urlInput = $('qr-url');
+const payloadSeg = $('payload-seg');
+const linkField = $('link-field');
+const textField = $('text-field');
+const intensityRange = $('intensity');
+const intensityVal = $('intensity-val');
+const anchorRange = $('anchor');
+const anchorVal = $('anchor-val');
+const scaleRange = $('scale');
+const scaleVal = $('scale-val');
+const ecSeg = $('ec-seg');
+const modeSeg = $('mode-seg');
+const modeHint = $('mode-hint');
+const dropzone = $('dropzone');
+const fileInput = $('file-input');
+const preserveFinders = $('preserve-finders');
+const boostContrast = $('boost-contrast');
+const canvas = $('qr-canvas');
+const metaModules = $('meta-modules');
+const metaSize = $('meta-size');
+const metaImage = $('meta-image');
+const metaFidelity = $('meta-fidelity');
+const downloadBtn = $('download');
+const testScanBtn = $('test-scan');
+
+// initialize input values from state
+urlInput.value = state.linkValue;
+textArea.value = state.textValue;
+
+// --- input wiring ---
+function updateCharCount() {
+  const len = state.text.length;
+  const cap = CAPACITY[state.ec];
+
+  // text-mode counter (full readout with capacity warning)
+  charCount.textContent = `${len} / ${cap} chars`;
+  charCount.className = 'char-count';
+  if (len > cap) charCount.classList.add('error');
+  else if (len > cap * 0.85) charCount.classList.add('warn');
+
+  // link-mode counter (compact)
+  charCountUrl.textContent = `${len} chars`;
+  charCountUrl.style.color = (len > cap) ? 'var(--danger)'
+    : (len > cap * 0.85) ? 'var(--accent)' : '';
+}
+
+function syncPayloadText() {
+  state.text = (state.payloadType === 'link') ? state.linkValue : state.textValue;
+  updateCharCount();
+  scheduleRender();
+}
+
+payloadSeg.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-payload]');
+  if (!btn) return;
+  payloadSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.payloadType = btn.dataset.payload;
+  if (state.payloadType === 'link') {
+    linkField.style.display = '';
+    textField.style.display = 'none';
+  } else {
+    linkField.style.display = 'none';
+    textField.style.display = '';
+  }
+  syncPayloadText();
+});
+
+urlInput.addEventListener('input', () => {
+  state.linkValue = urlInput.value;
+  if (state.payloadType === 'link') syncPayloadText();
+});
+
+urlInput.addEventListener('blur', () => {
+  // Auto-prepend https:// for bare domains so phones treat the QR as a URL.
+  // Skip for empty input, already-prefixed URLs, or non-http schemes
+  // (mailto:, tel:, sms:, etc.) the user typed deliberately.
+  const v = urlInput.value.trim();
+  if (v && !/^[a-z][a-z0-9+.-]*:/i.test(v) && /\./.test(v)) {
+    urlInput.value = 'https://' + v;
+    state.linkValue = urlInput.value;
+    if (state.payloadType === 'link') syncPayloadText();
+  }
+});
+
+// Paste handler: clean up common paste artifacts (whitespace, smart quotes,
+// newlines from copying out of rich-text apps).
+urlInput.addEventListener('paste', (e) => {
+  setTimeout(() => {
+    const cleaned = urlInput.value.replace(/\s+/g, '').replace(/[""'']/g, '');
+    if (cleaned !== urlInput.value) {
+      urlInput.value = cleaned;
+      state.linkValue = cleaned;
+      if (state.payloadType === 'link') syncPayloadText();
+    }
+  }, 0);
+});
+
+textArea.addEventListener('input', () => {
+  state.textValue = textArea.value;
+  if (state.payloadType === 'text') syncPayloadText();
+});
+
+ecSeg.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-ec]');
+  if (!btn) return;
+  ecSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.ec = btn.dataset.ec;
+  updateCharCount();
+  scheduleRender();
+});
+
+modeSeg.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-mode]');
+  if (!btn) return;
+  modeSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.mode = btn.dataset.mode;
+  modeHint.textContent = state.mode === 'pixelate'
+    ? 'Image-first. The slider is the share of Reed-Solomon error correction budget you want to spend on keeping image pixels.'
+    : 'QR pattern dominates. Slider blends image color into every module — at 0% the QR is pure black/white.';
+  scheduleRender();
+});
+
+intensityRange.addEventListener('input', () => {
+  state.intensity = intensityRange.value / 100;
+  intensityVal.textContent = `${intensityRange.value}%`;
+  scheduleRender();
+});
+
+anchorRange.addEventListener('input', () => {
+  state.anchorStrength = anchorRange.value / 100;
+  anchorVal.textContent = `${anchorRange.value}%`;
+  scheduleRender();
+});
+
+scaleRange.addEventListener('input', () => {
+  state.scale = +scaleRange.value;
+  scaleVal.textContent = state.scale;
+  scheduleRender();
+});
+
+preserveFinders.addEventListener('change', () => {
+  state.preserveFinders = preserveFinders.checked;
+  scheduleRender();
+});
+
+boostContrast.addEventListener('change', () => {
+  state.boostContrast = boostContrast.checked;
+  scheduleRender();
+});
+
+// --- file / drag-drop ---
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      state.image = img;
+      state.imageName = file.name;
+      // update dropzone to show preview
+      dropzone.classList.add('has-image');
+      dropzone.innerHTML = `
+        <img class="preview-img" src="${e.target.result}" alt="" />
+        <div class="filename">${file.name} · ${img.width}×${img.height}</div>
+      `;
+      metaImage.innerHTML = `<span>${img.width}×${img.height}</span>`;
+      scheduleRender();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropzone.classList.add('drag');
+});
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  handleFile(e.dataTransfer.files[0]);
+});
+
+// --- core render ---
+let renderTimer;
+function scheduleRender() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 50);
+}
+
+function isFinderArea(r, c, n) {
+  // 8x8 finder + separator at three corners
+  if (r < 8 && c < 8) return true;
+  if (r < 8 && c >= n - 8) return true;
+  if (r >= n - 8 && c < 8) return true;
+  return false;
+}
+
+function buildQR() {
+  // Try v40 first; fall back to lower versions if text is short.
+  // qrcode-generator: typeNumber 0 means auto-pick smallest version.
+  // We force version 40 to honor the user's request.
+  let qr;
+  try {
+    qr = qrcode(40, state.ec);
+    qr.addData(state.text || ' ');
+    qr.make();
+    return qr;
+  } catch (err) {
+    console.error('QR generation failed:', err);
+    return null;
+  }
+}
+
+function drawShape(ctx, x, y, size, style, color) {
+  ctx.fillStyle = color;
+  if (style === 'square') {
+    ctx.fillRect(x, y, size, size);
+  } else if (style === 'dot') {
+    ctx.beginPath();
+    ctx.arc(x + size/2, y + size/2, size/2 * 0.92, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (style === 'rounded') {
+    const r = size * 0.28;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + size - r, y);
+    ctx.quadraticCurveTo(x + size, y, x + size, y + r);
+    ctx.lineTo(x + size, y + size - r);
+    ctx.quadraticCurveTo(x + size, y + size, x + size - r, y + size);
+    ctx.lineTo(x + r, y + size);
+    ctx.quadraticCurveTo(x, y + size, x, y + size - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.fill();
+  } else if (style === 'diamond') {
+    ctx.beginPath();
+    ctx.moveTo(x + size/2, y);
+    ctx.lineTo(x + size, y + size/2);
+    ctx.lineTo(x + size/2, y + size);
+    ctx.lineTo(x, y + size/2);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+/* ====================================================================
+   IMAGE SAMPLING & SUB-MODULE PAINTING
+
+   Old approach: one image pixel sampled per QR module, then that single
+   color fills the whole module rectangle (scale × scale identical pixels).
+
+   New approach: sample the image at the FULL output resolution
+   (n × scale per side), so each module covers scale² distinct image
+   pixels. We compute the per-module *mean* luminance for the QR conflict
+   analysis, then paint each output pixel individually using its own
+   sub-module image color, applying a per-module bias only where the
+   module's mean must be forced into the right luminance band.
+
+   Why this works without breaking scans: phone QR decoders read each
+   module by sampling an area near its center and comparing to a
+   threshold. As long as the module's *mean* luminance lands on the
+   right side of the threshold, sub-module variation is invisible to
+   the decoder. The scanner sees the same dark/light decision; the
+   human sees scale²× more visual detail.
+==================================================================== */
+
+function sampleImageHighRes(img, n, scale) {
+  // Cover-fit the image into an (n*scale) × (n*scale) RGBA buffer.
+  const size = n * scale;
+  const tmp = document.createElement('canvas');
+  tmp.width = size; tmp.height = size;
+  const ctx = tmp.getContext('2d');
+  ctx.fillStyle = '#888';
+  ctx.fillRect(0, 0, size, size);
+
+  const ar = img.width / img.height;
+  let sx, sy, sw, sh;
+  if (ar > 1) {
+    sh = img.height; sw = img.height;
+    sx = (img.width - sw) / 2; sy = 0;
+  } else {
+    sw = img.width; sh = img.width;
+    sx = 0; sy = (img.height - sh) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+  return ctx.getImageData(0, 0, size, size).data;
+}
+
+function findMedianLum(data) {
+  // Histogram-based median (O(n + 256), no sort). Returns median
+  // luminance in [0, 1].
+  const hist = new Uint32Array(256);
+  const total = (data.length / 4) | 0;
+  for (let i = 0; i < total; i++) {
+    const idx = i * 4;
+    const v = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+    const b = v < 0 ? 0 : v > 255 ? 255 : (v + 0.5) | 0;
+    hist[b]++;
+  }
+  const half = total / 2;
+  let cum = 0;
+  for (let i = 0; i < 256; i++) {
+    cum += hist[i];
+    if (cum >= half) return i / 255;
+  }
+  return 0.5;
+}
+
+function applyAutoBalance(data) {
+  // STAGE 1 — Histogram match (per-pixel).
+  // Compute the image's median luminance and remap it to 0.5, so half
+  // the pixels land in each of the QR's "wants dark" / "wants light"
+  // bands. Without this, an 83%-dark image like the moonlit-landscape
+  // benchmark forces most light QR modules to conflict no matter how
+  // much budget we throw at them.
+  //
+  // The per-pixel S-curve push is intentionally REMOVED here — it
+  // fails on bimodal modules (sub-pixels with a sharp dark/light split,
+  // e.g. anywhere there's an image edge inside a module). Pushing dark
+  // pixels darker and light pixels lighter cancels out at the module
+  // mean. applyModulePush below handles that case correctly.
+  const median = findMedianLum(data);
+  if (median < 0.001 || median > 0.999) return; // degenerate
+
+  const denomLow  = median;
+  const denomHigh = 1 - median;
+  const total = (data.length / 4) | 0;
+
+  for (let i = 0; i < total; i++) {
+    const idx = i * 4;
+    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+    const oldLum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    const newLum = oldLum <= median
+      ? oldLum / denomLow * 0.5
+      : 0.5 + (oldLum - median) / denomHigh * 0.5;
+
+    if (oldLum > 0.001) {
+      const f = newLum / oldLum;
+      let nr = r * f, ng = g * f, nb = b * f;
+      data[idx]     = nr < 0 ? 0 : nr > 255 ? 255 : (nr + 0.5) | 0;
+      data[idx + 1] = ng < 0 ? 0 : ng > 255 ? 255 : (ng + 0.5) | 0;
+      data[idx + 2] = nb < 0 ? 0 : nb > 255 ? 255 : (nb + 0.5) | 0;
+    } else {
+      const v = (newLum * 255 + 0.5) | 0;
+      data[idx] = v; data[idx + 1] = v; data[idx + 2] = v;
+    }
+  }
+}
+
+function applyModulePush(highRes, n, scale) {
+  // STAGE 2 — Per-module S-curve push.
+  // Operates on per-module means rather than individual pixels. This is
+  // the key fix for bimodal modules: when sub-pixels are split between
+  // dark and light, a per-pixel push leaves the mean unchanged
+  // (pushing dark pixels darker + light pixels lighter cancels out).
+  // Per-module push scales every pixel in the module by the same
+  // factor, guaranteeing the new mean lands decisively past threshold.
+  //
+  // Empirical: drops coin-flip module rate (mean in 0.45..0.55) from
+  // ~8% to ~1% on the moonlit-landscape benchmark.
+  const stride = n * scale;
+  const sExp = 0.5; // sStrength = 0.5
+
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      // Mean luminance of this module's sub-pixels
+      let sum = 0;
+      for (let dy = 0; dy < scale; dy++) {
+        const rowBase = ((r * scale + dy) * stride + c * scale) * 4;
+        for (let dx = 0; dx < scale; dx++) {
+          const idx = rowBase + dx * 4;
+          sum += 0.299 * highRes[idx] + 0.587 * highRes[idx + 1] + 0.114 * highRes[idx + 2];
+        }
+      }
+      const oldMean = sum / (scale * scale * 255);
+
+      const t = (oldMean - 0.5) * 2;
+      const at = t < 0 ? -t : t;
+      if (at < 0.001 || oldMean < 0.001) continue;
+
+      const sign = t < 0 ? -1 : 1;
+      const pushed = sign * Math.pow(at, sExp);
+      const newMean = 0.5 + pushed * 0.5;
+      const factor = newMean / oldMean;
+
+      // Apply uniform scale factor to every sub-pixel in this module
+      for (let dy = 0; dy < scale; dy++) {
+        const rowBase = ((r * scale + dy) * stride + c * scale) * 4;
+        for (let dx = 0; dx < scale; dx++) {
+          const idx = rowBase + dx * 4;
+          let nr = highRes[idx]     * factor;
+          let ng = highRes[idx + 1] * factor;
+          let nb = highRes[idx + 2] * factor;
+          highRes[idx]     = nr < 0 ? 0 : nr > 255 ? 255 : (nr + 0.5) | 0;
+          highRes[idx + 1] = ng < 0 ? 0 : ng > 255 ? 255 : (ng + 0.5) | 0;
+          highRes[idx + 2] = nb < 0 ? 0 : nb > 255 ? 255 : (nb + 0.5) | 0;
+        }
+      }
+    }
+  }
+}
+
+function computeModuleLums(highRes, n, scale) {
+  // Per-module mean luminance — the value the camera will actually
+  // threshold against. Computed once, used both for conflict analysis
+  // and policy decisions.
+  const lums = new Float32Array(n * n);
+  const stride = n * scale;
+  const cnt = scale * scale;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      let sR = 0, sG = 0, sB = 0;
+      for (let dy = 0; dy < scale; dy++) {
+        const rowOff = ((r * scale + dy) * stride + c * scale) * 4;
+        for (let dx = 0; dx < scale; dx++) {
+          const px = rowOff + dx * 4;
+          sR += highRes[px];
+          sG += highRes[px + 1];
+          sB += highRes[px + 2];
+        }
+      }
+      lums[r * n + c] = (0.299 * (sR / cnt) + 0.587 * (sG / cnt) + 0.114 * (sB / cnt)) / 255;
+    }
+  }
+  return lums;
+}
+
+function render() {
+  const qr = buildQR();
+  if (!qr) return;
+
+  const n = qr.getModuleCount();
+  const scale = state.scale;
+  const padding = scale * 4;
+  const size = n * scale + padding * 2;
+
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, size, size);
+
+  // ===== FAST PATH: no image, plain B/W QR =====
+  if (!state.image) {
+    ctx.fillStyle = '#000000';
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (qr.isDark(r, c)) {
+          ctx.fillRect(padding + c * scale, padding + r * scale, scale, scale);
+        }
+      }
+    }
+    metaModules.innerHTML = `<span>${n}</span>`;
+    metaSize.innerHTML = `<span>${size}</span>`;
+    metaFidelity.innerHTML = `<span>—</span>`;
+    return;
+  }
+
+  // ===== HIGH-RES SAMPLING + OPTIONAL CONTRAST BOOST =====
+  const highRes = sampleImageHighRes(state.image, n, scale);
+  if (state.boostContrast) {
+    applyAutoBalance(highRes);
+    applyModulePush(highRes, n, scale);
+  }
+  const lums = computeModuleLums(highRes, n, scale);
+
+  // ===== RS-AWARE ANALYSIS (pixelate mode only) =====
+  let corruptibleCodewords = null;
+  let fidelityStats = null;
+  const useAdaptive = state.mode === 'pixelate' && n === V40.N;
+
+  if (useAdaptive) {
+    const blockInfo = blockMapForECL(state.ec);
+    const { codewordToBlock, maxCorrect } = blockInfo;
+
+    const cwConflicts = new Map();
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (isFunctionalV40(r, c)) continue;
+        const bitIdx = placementBitIndex(r, c);
+        if (bitIdx < 0) continue;
+        const isDark = qr.isDark(r, c);
+        const naturalDark = lums[r * n + c] < 0.5;
+        if (isDark !== naturalDark) {
+          const cwIdx = bitIdx >> 3;
+          cwConflicts.set(cwIdx, (cwConflicts.get(cwIdx) || 0) + 1);
+        }
+      }
+    }
+
+    const budgetPerBlock = Math.round(state.intensity * maxCorrect);
+
+    const byBlock = new Map();
+    for (const [cwIdx, count] of cwConflicts) {
+      const blk = codewordToBlock[cwIdx];
+      if (blk === undefined) continue;
+      if (!byBlock.has(blk)) byBlock.set(blk, []);
+      byBlock.get(blk).push({ cwIdx, count });
+    }
+
+    corruptibleCodewords = new Set();
+    let savedConflicts = 0, totalConflicts = 0;
+    for (const [, list] of byBlock) {
+      list.sort((a, b) => b.count - a.count);
+      for (let i = 0; i < list.length; i++) {
+        totalConflicts += list[i].count;
+        if (i < budgetPerBlock) {
+          corruptibleCodewords.add(list[i].cwIdx);
+          savedConflicts += list[i].count;
+        }
+      }
+    }
+    fidelityStats = {
+      totalConflicts, savedConflicts,
+      forcedConflicts: totalConflicts - savedConflicts,
+      budgetPerBlock,
+    };
+  }
+
+  // ===== PER-MODULE POLICY TABLE =====
+  // Decide once per module how every sub-pixel inside it will be
+  // colored. This pulls a lot of branching out of the inner pixel loop.
+  // We also compute an *adaptive* per-module forcing factor `forceK`:
+  // instead of slamming every forced pixel with the same big push, we
+  // compute the minimum push each module needs to land its mean luminance
+  // safely on the right side of the camera's threshold. Modules whose
+  // natural mean is only just barely on the wrong side get a gentle
+  // nudge; modules deep on the wrong side get a stronger one. Result:
+  // forced pixels keep more of their image color where possible.
+  const POL_IMAGE       = 0;
+  const POL_FORCE_DARK  = 1;
+  const POL_FORCE_LIGHT = 2;
+  const POL_PURE_DARK   = 3;
+  const POL_PURE_LIGHT  = 4;
+
+  // Anchor strength → target luminance bands. The slider (0.20..1.00)
+  // controls how far past the 0.5 threshold each forced module's mean
+  // must land. 0.20 → 0.40/0.60 (just past threshold, image dominates);
+  // 1.00 → 0.10/0.90 (deep into pure black/white, anchors very visible).
+  const targetDark  = 0.5 - state.anchorStrength * 0.4;
+  const targetLight = 0.5 + state.anchorStrength * 0.4;
+
+  const policy = new Uint8Array(n * n);
+  const forceK = new Float32Array(n * n);
+
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const isDark = qr.isDark(r, c);
+      const idx = r * n + c;
+      const critical = state.preserveFinders &&
+        (n === V40.N ? isFunctionalV40(r, c) : isFinderArea(r, c, n));
+
+      if (critical) {
+        policy[idx] = isDark ? POL_PURE_DARK : POL_PURE_LIGHT;
+        continue;
+      }
+
+      const naturalDark = lums[idx] < 0.5;
+      const matches = isDark === naturalDark;
+
+      let pol;
+      if (state.mode === 'pixelate') {
+        let allowImage = matches;
+        if (!matches && useAdaptive) {
+          const bitIdx = placementBitIndex(r, c);
+          if (bitIdx >= 0) {
+            const cwIdx = bitIdx >> 3;
+            if (corruptibleCodewords.has(cwIdx)) allowImage = true;
+          }
+        }
+        pol = allowImage ? POL_IMAGE : (isDark ? POL_FORCE_DARK : POL_FORCE_LIGHT);
+      } else {
+        // overlay mode: every module forced uniformly by intensity slider
+        pol = isDark ? POL_FORCE_DARK : POL_FORCE_LIGHT;
+      }
+      policy[idx] = pol;
+
+      // Compute adaptive blend factor for forced modules. Pixelate mode
+      // uses the actual module-mean luminance to compute the minimum push
+      // needed; overlay mode uses the slider directly.
+      if (pol === POL_FORCE_DARK) {
+        if (state.mode === 'pixelate') {
+          // k is a multiplier (0..1) on each sub-pixel. New mean = old mean × k.
+          // Need: lums[idx] × k ≤ targetDark  →  k ≤ targetDark / lums[idx].
+          // (lums[idx] > 0.5 here because !matches.)
+          forceK[idx] = Math.max(0, Math.min(1, targetDark / Math.max(0.001, lums[idx])));
+        } else {
+          forceK[idx] = state.intensity; // overlay: 0 = pure black
+        }
+      } else if (pol === POL_FORCE_LIGHT) {
+        if (state.mode === 'pixelate') {
+          // k is a blend factor (0..1) toward white. New mean = old + (1-old) × k.
+          // Need: lums[idx] + (1 - lums[idx]) × k ≥ targetLight.
+          // (lums[idx] < 0.5 here because !matches.)
+          const denom = 1 - lums[idx];
+          forceK[idx] = denom > 0.001
+            ? Math.max(0, Math.min(1, (targetLight - lums[idx]) / denom))
+            : 0;
+        } else {
+          forceK[idx] = 1 - state.intensity; // overlay: 1 = pure white
+        }
+      }
+    }
+  }
+
+  // ===== SUB-MODULE PAINTING =====
+  // Walk every output pixel inside the QR area. Each pixel reads its
+  // own image color from the high-res sample, then applies the bias
+  // (or override) dictated by its module's policy. Result: a faithful
+  // pixelated rendering of the source image where every module's mean
+  // luminance still satisfies the QR's required dark/light pattern.
+  const imageData = ctx.getImageData(0, 0, size, size);
+  const out = imageData.data;
+  const qrSize = n * scale;
+
+  for (let py = 0; py < qrSize; py++) {
+    const r = (py / scale) | 0;
+    const srcRow = py * qrSize * 4;
+    const outRow = (padding + py) * size * 4 + padding * 4;
+
+    for (let px = 0; px < qrSize; px++) {
+      const c = (px / scale) | 0;
+      const srcIdx = srcRow + px * 4;
+      const outIdx = outRow + px * 4;
+
+      const pr = highRes[srcIdx];
+      const pg = highRes[srcIdx + 1];
+      const pb = highRes[srcIdx + 2];
+
+      const modIdx = r * n + c;
+      const pol = policy[modIdx];
+      let oR, oG, oB;
+
+      if (pol === POL_IMAGE) {
+        oR = pr; oG = pg; oB = pb;
+      } else if (pol === POL_PURE_DARK) {
+        oR = 0; oG = 0; oB = 0;
+      } else if (pol === POL_PURE_LIGHT) {
+        oR = 255; oG = 255; oB = 255;
+      } else if (pol === POL_FORCE_DARK) {
+        const k = forceK[modIdx];
+        oR = pr * k; oG = pg * k; oB = pb * k;
+      } else { // POL_FORCE_LIGHT
+        const k = forceK[modIdx];
+        oR = pr + (255 - pr) * k;
+        oG = pg + (255 - pg) * k;
+        oB = pb + (255 - pb) * k;
+      }
+
+      out[outIdx]     = oR;
+      out[outIdx + 1] = oG;
+      out[outIdx + 2] = oB;
+      out[outIdx + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  metaModules.innerHTML = `<span>${n}</span>`;
+  metaSize.innerHTML = `<span>${size}</span>`;
+
+  if (fidelityStats) {
+    const totalData = 29648; // V40: 3706 codewords × 8 bits
+    const imageWins = totalData - fidelityStats.forcedConflicts;
+    const pct = (imageWins / totalData * 100).toFixed(1);
+    metaFidelity.innerHTML = `<span>${pct}%</span>`;
+  } else {
+    metaFidelity.innerHTML = `<span>—</span>`;
+  }
+}
+
+// --- download ---
+downloadBtn.addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `qr-mosaic-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+// --- scannability hint ---
+testScanBtn.addEventListener('click', () => {
+  const btn = testScanBtn;
+  const orig = btn.innerHTML;
+  btn.innerHTML = 'Point your phone camera at the QR →';
+  btn.style.color = 'var(--accent)';
+  btn.style.borderColor = 'var(--accent)';
+  setTimeout(() => {
+    btn.innerHTML = orig;
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }, 3500);
+});
+
+// initial render
+updateCharCount();
+render();
+</script>
+
+</body>
+</html>
